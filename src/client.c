@@ -117,8 +117,6 @@ int main(int argc, char **argv)
     if (connect(client_skt, (struct sockaddr*) &addr, sizeof(addr)) != 0) {
         perror("Unable to TCP connect to server");
         goto exit;
-    } else {
-        printf("TCP connection to server successful\n");
     }
 
     /* Create client SSL structure using dedicated client socket */
@@ -145,9 +143,6 @@ int main(int argc, char **argv)
             goto exit;
         }
 
-        printf("SSL connection to server successful\n\n");
-
-
         /* Loop to send input from keyboard */
         while (true) {
 
@@ -160,7 +155,7 @@ int main(int argc, char **argv)
 
             // Affiche la réponse du serveur
             rxbuf[rxlen] = 0;  // Null terminate the response
-            printf("Received from server: %s", rxbuf);
+            printf("Received from server: %s\n", rxbuf);
 
             // Renvoie la même donnée au serveur
             if (SSL_write(ssl, rxbuf, rxlen) <= 0) {

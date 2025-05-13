@@ -14,11 +14,11 @@
 #define BUFFER_SIZE 1024
 
 typedef struct {
+    int id;
     int socket;
     SSL *ssl;
 } Client;
 
-static SSL_CTX *ssl_ctx;
 static const int server_port = 4433;
 static volatile bool server_running = true;
 static Client clients[MAX_CLIENTS];
@@ -26,6 +26,11 @@ static pthread_t client_threads[MAX_CLIENTS];
 static int client_count = 0;
 static pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
 
+/* Génère un id unique pour les clients */
+int generate_unique_id() {
+    static int id_counter = 1;
+    return id_counter++;
+}
 
 /* Fonction pour créer le socket et le lier au port d'écoutev*/
 static int create_socket()
@@ -113,11 +118,77 @@ static void *handle_stdin(void *arg) {
     while (1) {
         fgets(buffer, sizeof(buffer), stdin);
 
-        pthread_mutex_lock(&client_mutex);
-        for (int i = 0; i < client_count; i++) {
-            SSL_write(clients[i].ssl, buffer, strlen(buffer));
+        if (strncmp(buffer, "list", 4) == 0) {
+            pthread_mutex_lock(&client_mutex);
+            printf("Number of clients: %d\n", client_count);
+            printf("Connected clients:\n");
+            for (int i = 0; i < client_count; i++) {
+                printf("Client ID: %d | Socket: %d\n", clients[i].id, clients[i].socket);
+            }
+            pthread_mutex_unlock(&client_mutex);
         }
-        pthread_mutex_unlock(&client_mutex);
+
+        else if (strncmp(buffer, "man", 3) == 0) {
+            printf("list -- show all the clients\n");
+            printf("send -- send data to a client -- send <client_id> <message>\n");
+            printf("kick -- kick a client         -- kick <client_id>\n");
+        }
+
+        else if (strncmp(buffer, "send ", 5) == 0) {
+            int client_id;
+            char message[BUFFER_SIZE];
+
+            if (sscanf(buffer + 5, "%d %[^\n]", &client_id, message) == 2) {
+                pthread_mutex_lock(&client_mutex);
+                for (int i = 0; i < client_count; i++) {
+                    if (clients[i].id == client_id) {
+                        SSL_write(clients[i].ssl, message, strlen(message));
+
+                    }
+                }
+                pthread_mutex_unlock(&client_mutex);
+            }
+            else {
+                printf("Client ID not found.\n");
+                printf("Usage: send <client_id> <message>\n");
+            }
+        }
+
+        else if (strncmp(buffer, "kick ", 5) == 0) {
+            int client_id;
+
+            if (sscanf(buffer + 5, "%d", &client_id) == 1) {
+                pthread_mutex_lock(&client_mutex);
+                for (int i = 0; i < client_count; i++) {
+                    if (clients[i].id == client_id) {
+                        printf("Kicking client %d...\n", client_id);
+                        // Informer le thread de se terminer proprement
+                        pthread_cancel(client_threads[i]);
+                        // Attendre la fin du thread
+                        pthread_join(client_threads[i], NULL);
+                        // Libération des ressources
+                        SSL_shutdown(clients[i].ssl);
+                        SSL_free(clients[i].ssl);
+                        close(clients[i].socket);
+
+                        printf("Client %d disconnected\n", client_id);
+
+                        // Supprime le client de la liste
+                        clients[i] = clients[client_count - 1];
+                        client_threads[i] = client_threads[client_count - 1];
+                        client_count--;
+
+                        break;
+                    }
+                }
+                pthread_mutex_unlock(&client_mutex);
+            }
+        }
+
+        else {
+            printf("Unknown command: %s", buffer);
+            printf("man to show all commands\n");
+        }
     }
 }
 
@@ -133,11 +204,23 @@ static void *handle_client(void *arg) {
             SSL_shutdown(client->ssl);
             SSL_free(client->ssl);
             close(client->socket);
+            pthread_mutex_lock(&client_mutex);
+            int i;
+            for (i = 0; i < client_count; i++) {
+                if (clients[i].socket == client->socket) {
+                    break;
+                }
+            }
+            if (i < client_count) {
+                clients[i] = clients[client_count - 1];
+                client_count--;
+            }
+            pthread_mutex_unlock(&client_mutex);
             pthread_exit(NULL);
         }
 
         buffer[bytes] = 0;
-        printf("Client: %s", buffer);
+        printf("Client: %s\n", buffer);
         //SSL_write(client->ssl, buffer, bytes);
     }
 }
@@ -190,10 +273,6 @@ int main(int argc, char **argv) {
         ssl = SSL_new(ssl_ctx);
         SSL_set_fd(ssl, client_skt);
 
-        // if (!SSL_set_fd(ssl, client_skt)) {
-        //     ERR_print_errors_fp(stderr);
-        //     exit(EXIT_FAILURE);
-        // }
 
         /* Wait for SSL connection from the client */
         if (SSL_accept(ssl) <= 0) {
@@ -201,7 +280,6 @@ int main(int argc, char **argv) {
             ERR_print_errors_fp(stderr);
             close(client_skt);
             SSL_free(ssl);
-            // continue;
 
         } else {
             printf("Client SSL connection accepted\n\n");
@@ -212,6 +290,7 @@ int main(int argc, char **argv) {
             }
 
             pthread_mutex_lock(&client_mutex);
+            clients[client_count].id = generate_unique_id();
             clients[client_count].socket = client_skt;
             clients[client_count].ssl = ssl;
             pthread_create(&client_threads[client_count], NULL, handle_client, &clients[client_count]);
