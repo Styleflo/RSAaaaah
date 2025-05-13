@@ -1,7 +1,3 @@
-//
-// Created by Florian Touraine on 06/05/2025.
-//
-
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
@@ -14,18 +10,24 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+#define MAX_CLIENTS 100
+#define BUFFER_SIZE 1024
+
+typedef struct {
+    int socket;
+    SSL *ssl;
+} Client;
+
+static SSL_CTX *ssl_ctx;
 static const int server_port = 4433;
-
-/*
- * This bool won't be useful until both accept/read (TCP & SSL) methods
- * can be called with a timeout. TBD.
- */
 static volatile bool server_running = true;
+static Client clients[MAX_CLIENTS];
+static pthread_t client_threads[MAX_CLIENTS];
+static int client_count = 0;
+static pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-/*
- * Fonction pour créer le socket et le lier au port d'écoute
- *
- */
+
+/* Fonction pour créer le socket et le lier au port d'écoutev*/
 static int create_socket()
 {
     int s;
@@ -61,7 +63,7 @@ static int create_socket()
     return s;
 }
 
-
+/* Crée le contexte de la connection SSL, c'est-à-dire la methode */
 static SSL_CTX *create_context()
 {
     const SSL_METHOD *method;
@@ -78,6 +80,7 @@ static SSL_CTX *create_context()
     return ctx;
 }
 
+/* Configure la verification des certificats pour les clients */
 static void configure_server_context(SSL_CTX *ctx)
 {
     /* Set the key and cert */
@@ -90,29 +93,62 @@ static void configure_server_context(SSL_CTX *ctx)
         ERR_print_errors_fp(stderr);
         exit(EXIT_FAILURE);
     }
+
+    /*
+     * Configure the server to abort the handshake if certificate verification
+     * fails
+     */
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+
+    if (!SSL_CTX_load_verify_locations(ctx, "./ssl/ca-cert.pem", NULL)) {
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
 }
 
+/* Fonction en charge de stdin pour le thread principal */
+static void *handle_stdin(void *arg) {
+    char buffer[BUFFER_SIZE];
 
-#define BUFFERSIZE 1024
-int main(int argc, char **argv)
-{
+    while (1) {
+        fgets(buffer, sizeof(buffer), stdin);
+
+        pthread_mutex_lock(&client_mutex);
+        for (int i = 0; i < client_count; i++) {
+            SSL_write(clients[i].ssl, buffer, strlen(buffer));
+        }
+        pthread_mutex_unlock(&client_mutex);
+    }
+}
+
+/* Gère chaque client en écoutant ce que le client envoie */
+static void *handle_client(void *arg) {
+    Client *client = (Client *)arg;
+    char buffer[BUFFER_SIZE];
+
+    while (1) {
+        int bytes = SSL_read(client->ssl, buffer, sizeof(buffer));
+        if (bytes <= 0) {
+            perror("Client disconnected or SSL error");
+            SSL_shutdown(client->ssl);
+            SSL_free(client->ssl);
+            close(client->socket);
+            pthread_exit(NULL);
+        }
+
+        buffer[bytes] = 0;
+        printf("Client: %s", buffer);
+        //SSL_write(client->ssl, buffer, bytes);
+    }
+}
+
+int main(int argc, char **argv) {
+    signal(SIGPIPE, SIG_IGN);
 
     SSL_CTX *ssl_ctx = NULL;
     SSL *ssl = NULL;
 
     int server_skt = -1;
-    int client_skt = -1;
-
-
-    char rxbuf[128];
-    size_t rxcap = sizeof(rxbuf);
-    int rxlen;
-
-    struct sockaddr_in addr;
-    unsigned int addr_len = sizeof(addr);
-
-    /* ignore SIGPIPE so that server can continue running when client pipe closes abruptly */
-    signal(SIGPIPE, SIG_IGN);
 
     /* Create context used by server */
     ssl_ctx = create_context();
@@ -123,6 +159,14 @@ int main(int argc, char **argv)
     /* Create server socket; will bind with server port and listen */
     server_skt = create_socket();
 
+    /* Crée un Thread pour prendre en charge les entrées stdin */
+    pthread_t stdin_thread;
+    if (pthread_create(&stdin_thread, NULL, handle_stdin, NULL) != 0) {
+        perror("Erreur lors de la création du thread stdin");
+        exit(EXIT_FAILURE);
+    }
+    printf("Server listening on port %d\n", 4433);
+
     /*
      * Loop to accept clients.
      * Need to implement timeouts on TCP & SSL connect/read functions
@@ -130,67 +174,53 @@ int main(int argc, char **argv)
      */
     while (server_running) {
         /* Wait for TCP connection from client */
-        client_skt = accept(server_skt, (struct sockaddr*) &addr,
-                &addr_len);
+        struct sockaddr_in client_addr;
+        socklen_t len = sizeof(client_addr);
+        int client_skt = accept(server_skt, (struct sockaddr*)&client_addr, &len);
+
         if (client_skt < 0) {
-            perror("Unable to accept");
-            exit(EXIT_FAILURE);
+            perror("Unable to accept connection");
+            continue;
+            // exit(EXIT_FAILURE);  comprendre ce que ça fait
         }
 
         printf("Client TCP connection accepted\n");
 
         /* Create server SSL structure using newly accepted client socket */
         ssl = SSL_new(ssl_ctx);
-        if (!SSL_set_fd(ssl, client_skt)) {
-            ERR_print_errors_fp(stderr);
-            exit(EXIT_FAILURE);
-        }
+        SSL_set_fd(ssl, client_skt);
+
+        // if (!SSL_set_fd(ssl, client_skt)) {
+        //     ERR_print_errors_fp(stderr);
+        //     exit(EXIT_FAILURE);
+        // }
 
         /* Wait for SSL connection from the client */
         if (SSL_accept(ssl) <= 0) {
+            printf("Client SSL connection rejected\n");
             ERR_print_errors_fp(stderr);
-            server_running = false;
-        } else {
+            close(client_skt);
+            SSL_free(ssl);
+            // continue;
 
+        } else {
             printf("Client SSL connection accepted\n\n");
 
-            /* Echo loop */
-            while (true) {
-                /* Get message from client; will fail if client closes connection */
-                if ((rxlen = SSL_read(ssl, rxbuf, rxcap)) <= 0) {
-                    if (rxlen == 0) {
-                        printf("Client closed connection\n");
-                    } else {
-                        printf("SSL_read returned %d\n", rxlen);
-                    }
-                    ERR_print_errors_fp(stderr);
-                    break;
-                }
-                /* Insure null terminated input */
-                rxbuf[rxlen] = 0;
-                /* Look for kill switch */
-                if (strcmp(rxbuf, "kill\n") == 0) {
-                    /* Terminate...with extreme prejudice */
-                    printf("Server received 'kill' command\n");
-                    server_running = false;
-                    break;
-                }
-                /* Show received message */
-                printf("Received: %s", rxbuf);
-                /* Echo it back */
-                if (SSL_write(ssl, rxbuf, rxlen) <= 0) {
-                    ERR_print_errors_fp(stderr);
-                }
+            const char *ping_message = "ping";
+            if (SSL_write(ssl, ping_message, strlen(ping_message)) <= 0) {
+                ERR_print_errors_fp(stderr);
             }
-        }
-        if (server_running) {
-            /* Cleanup for next client */
-            SSL_shutdown(ssl);
-            SSL_free(ssl);
-            close(client_skt);
+
+            pthread_mutex_lock(&client_mutex);
+            clients[client_count].socket = client_skt;
+            clients[client_count].ssl = ssl;
+            pthread_create(&client_threads[client_count], NULL, handle_client, &clients[client_count]);
+            client_count++;
+            pthread_mutex_unlock(&client_mutex);
+
+            printf("New client connected. Total clients: %d\n", client_count);
         }
     }
-    printf("Server exiting...\n");
 
 exit:
     /* Close up */

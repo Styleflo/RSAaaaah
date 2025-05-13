@@ -44,16 +44,23 @@ static SSL_CTX *create_context()
 
 static void configure_client_context(SSL_CTX *ctx)
 {
+    /* Set the key and cert */
+    if (SSL_CTX_use_certificate_chain_file(ctx, "./ssl/client-cert.pem") <= 0) {
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+
+    if (SSL_CTX_use_PrivateKey_file(ctx, "./ssl/client-key.pem", SSL_FILETYPE_PEM) <= 0) {
+        ERR_print_errors_fp(stderr);
+        exit(EXIT_FAILURE);
+    }
+
     /*
      * Configure the client to abort the handshake if certificate verification
      * fails
      */
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
-    /*
-     * In a real application you would probably just use the default system certificate trust store and call:
-     *     SSL_CTX_set_default_verify_paths(ctx);
-     * In this demo though we are using a self-signed certificate, so the client must trust it directly.
-     */
+
     if (!SSL_CTX_load_verify_locations(ctx, "./ssl/ca-cert.pem", NULL)) {
         ERR_print_errors_fp(stderr);
         exit(EXIT_FAILURE);
@@ -64,7 +71,6 @@ static void configure_client_context(SSL_CTX *ctx)
 #define BUFFERSIZE 1024
 int main(int argc, char **argv)
 {
-    int result;
 
     SSL_CTX *ssl_ctx = NULL;
     SSL *ssl = NULL;
@@ -129,42 +135,38 @@ int main(int argc, char **argv)
         goto exit;
     }
 
+
     /* Now do SSL connect with server */
     if (SSL_connect(ssl) == 1) {
 
+        rxlen = SSL_read(ssl, rxbuf, rxcap);
+        if (rxlen <= 0) {
+            printf("SSL connection refused due to invalid certification\n");
+            goto exit;
+        }
+
         printf("SSL connection to server successful\n\n");
+
 
         /* Loop to send input from keyboard */
         while (true) {
-            /* Get a line of input */
-            memset(buffer, 0, BUFFERSIZE);
-            txbuf = fgets(buffer, BUFFERSIZE, stdin);
 
-            /* Exit loop on error */
-            if (txbuf == NULL) {
-                break;
-            }
-            /* Exit loop if just a carriage return */
-            if (txbuf[0] == '\n') {
-                break;
-            }
-            /* Send it to the server */
-            if ((result = SSL_write(ssl, txbuf, strlen(txbuf))) <= 0) {
-                printf("Server closed connection\n");
-                ERR_print_errors_fp(stderr);
-                break;
-            }
-
-            /* Wait for the echo */
             rxlen = SSL_read(ssl, rxbuf, rxcap);
             if (rxlen <= 0) {
                 printf("Server closed connection\n");
                 ERR_print_errors_fp(stderr);
                 break;
-            } else {
-                /* Show it */
-                rxbuf[rxlen] = 0;
-                printf("Received: %s", rxbuf);
+            }
+
+            // Affiche la réponse du serveur
+            rxbuf[rxlen] = 0;  // Null terminate the response
+            printf("Received from server: %s", rxbuf);
+
+            // Renvoie la même donnée au serveur
+            if (SSL_write(ssl, rxbuf, rxlen) <= 0) {
+                printf("Error sending data back to server\n");
+                ERR_print_errors_fp(stderr);
+                break;
             }
         }
         printf("Client exiting...\n");
