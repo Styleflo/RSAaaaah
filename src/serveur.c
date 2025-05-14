@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <string.h>
 #include <signal.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -9,15 +8,12 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <semaphore.h>
+#include "common.h"
 
 #define MAX_CLIENTS 100
 #define BUFFER_SIZE 1024
 
-typedef struct {
-    int id;
-    int socket;
-    SSL *ssl;
-} Client;
 
 static const int server_port = 4433;
 static volatile bool server_running = true;
@@ -116,49 +112,128 @@ static void *handle_stdin(void *arg) {
     char buffer[BUFFER_SIZE];
 
     while (1) {
+
+        Message* message = malloc(sizeof(Message));
+        int client_id;
+
+        printf("========================[Server]========================\n");
+        printf("Usual commands :\n");
+        printf("[1] Launch a command to a client\n");
+        printf("[2] Basic commands\n");
+        printf("[3] Exit\n");
+
         fgets(buffer, sizeof(buffer), stdin);
+        if (strncmp(buffer, "1", 1) == 0) {
+            message->category = 1;
 
-        if (strncmp(buffer, "list", 4) == 0) {
-            pthread_mutex_lock(&client_mutex);
-            printf("Number of clients: %d\n", client_count);
-            printf("Connected clients:\n");
-            for (int i = 0; i < client_count; i++) {
-                printf("Client ID: %d | Socket: %d\n", clients[i].id, clients[i].socket);
-            }
-            pthread_mutex_unlock(&client_mutex);
-        }
+            printf("========================[Server]========================\n");
+            printf("Basic commands :\n");
+            printf("[1] NMAP \n");
+            printf("[2] OWASP ZAP\n");
+            printf("[3] Nikto\n");
 
-        else if (strncmp(buffer, "man", 3) == 0) {
-            printf("list -- show all the clients\n");
-            printf("send -- send data to a client -- send <client_id> <message>\n");
-            printf("kick -- kick a client         -- kick <client_id>\n");
-        }
+            fgets(buffer, sizeof(buffer), stdin);
+            if (strncmp(buffer, "1", 1) == 0) {
+                message->scanner = 1;
 
-        else if (strncmp(buffer, "send ", 5) == 0) {
-            int client_id;
-            char message[BUFFER_SIZE];
-
-            if (sscanf(buffer + 5, "%d %[^\n]", &client_id, message) == 2) {
+                printf("========================[Server]========================\n");
                 pthread_mutex_lock(&client_mutex);
+                printf("Connected clients:\n");
                 for (int i = 0; i < client_count; i++) {
-                    if (clients[i].id == client_id) {
-                        SSL_write(clients[i].ssl, message, strlen(message));
-
-                    }
+                    printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO \n", clients[i].id);
                 }
                 pthread_mutex_unlock(&client_mutex);
-            }
-            else {
-                printf("Client ID not found.\n");
-                printf("Usage: send <client_id> <message>\n");
+                printf("Enter the client ID : ");
+
+                fgets(buffer, sizeof(buffer), stdin);
+                client_id = atoi(buffer);
+
+                printf("Enter the arguments : ");
+                fgets(buffer, sizeof(buffer), stdin);
+
+                message->payload = malloc((strlen(buffer) + 1) * sizeof(char));
+                strcpy(message->payload, buffer);
+
+                if (client_id <= client_count) {
+                    pthread_mutex_lock(&client_mutex);
+                    for (int i = 0; i < client_count; i++) {
+                        if (clients[i].id == client_id) {
+                            send_message(clients[i], message);
+                        }
+                    }
+                    pthread_mutex_unlock(&client_mutex);
+                }
             }
         }
 
-        else if (strncmp(buffer, "kick ", 5) == 0) {
-            int client_id;
+        else if (strncmp(buffer, "2", 1) == 0) {
+            message->category = 2;
+            printf("========================[Server]========================\n");
+            printf("Basic commands :\n");
+            printf("[1] ls -- list all the clients and their informations\n");
+            printf("[2] kick -- use to close a ssl connection with a client\n");
+            printf("[3] send -- to send a message to a client\n");
 
-            if (sscanf(buffer + 5, "%d", &client_id) == 1) {
+            fgets(buffer, sizeof(buffer), stdin);
+
+            if (strncmp(buffer, "1", 1) == 0) {
                 pthread_mutex_lock(&client_mutex);
+                printf("========================[Server]========================\n");
+                printf("Number of clients: %d\n", client_count);
+                printf("Connected clients:\n");
+                for (int i = 0; i < client_count; i++) {
+                    printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO \n", clients[i].id);
+                }
+                pthread_mutex_unlock(&client_mutex);
+            } //list of client
+
+            else if (strncmp(buffer, "3", 1) == 0) {
+                int client_id;
+                char message2[BUFFER_SIZE];
+                printf("========================[Server]========================\n");
+                pthread_mutex_lock(&client_mutex);
+                printf("Connected clients:\n");
+                for (int i = 0; i < client_count; i++) {
+                    printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO\n", clients[i].id);
+                }
+                pthread_mutex_unlock(&client_mutex);
+                printf("Enter the client ID: ");
+                fgets(message2, sizeof(message2), stdin);
+                client_id = atoi(message2);
+                printf("Message: ");
+                fgets(message2, sizeof(message2), stdin);
+
+                message->payload = malloc((strlen(message2) + 1) * sizeof(char));
+                strcpy(message->payload, message2);
+
+                if (client_id <= client_count) {
+                    pthread_mutex_lock(&client_mutex);
+                    for (int i = 0; i < client_count; i++) {
+                        if (clients[i].id == client_id) {
+                            send_message(clients[i], message);
+                        }
+                    }
+                    pthread_mutex_unlock(&client_mutex);
+                }
+                else {
+                    printf("========================[Server]========================\n");
+                    printf("Client ID not found.\n");
+                    printf("Usage: send <client_id> <message>\n");
+                }
+            } //to send a message to a client
+
+            else if (strncmp(buffer, "2", 1) == 0) {
+
+                printf("========================[Server]========================\n");
+                pthread_mutex_lock(&client_mutex);
+                printf("Connected clients:\n");
+                for (int i = 0; i < client_count; i++) {
+                    printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO %d\n", clients[i].id, clients[i].socket);
+                }
+                printf("Enter the client ID: ");
+                fgets(buffer, sizeof(buffer), stdin);
+                client_id = atoi(buffer);
+
                 for (int i = 0; i < client_count; i++) {
                     if (clients[i].id == client_id) {
                         printf("Kicking client %d...\n", client_id);
@@ -182,12 +257,11 @@ static void *handle_stdin(void *arg) {
                     }
                 }
                 pthread_mutex_unlock(&client_mutex);
-            }
-        }
+            } //to kick a client
+        } //Basic commands
 
         else {
             printf("Unknown command: %s", buffer);
-            printf("man to show all commands\n");
         }
     }
 }
@@ -198,29 +272,50 @@ static void *handle_client(void *arg) {
     char buffer[BUFFER_SIZE];
 
     while (1) {
-        int bytes = SSL_read(client->ssl, buffer, sizeof(buffer));
+
+        int result;
+        int bytes = SSL_read(client->ssl, &result, sizeof(int));
+        result = ntohl(result);
+
         if (bytes <= 0) {
-            perror("Client disconnected or SSL error");
-            SSL_shutdown(client->ssl);
-            SSL_free(client->ssl);
-            close(client->socket);
-            pthread_mutex_lock(&client_mutex);
-            int i;
-            for (i = 0; i < client_count; i++) {
-                if (clients[i].socket == client->socket) {
-                    break;
-                }
-            }
-            if (i < client_count) {
-                clients[i] = clients[client_count - 1];
-                client_count--;
-            }
-            pthread_mutex_unlock(&client_mutex);
-            pthread_exit(NULL);
+            perror("SSL_read");
         }
 
-        buffer[bytes] = 0;
-        printf("Client: %s\n", buffer);
+        if (result == RESULT) {
+
+            printf("========================[Result]========================\n");
+            while ((bytes = SSL_read(client->ssl, buffer, sizeof(buffer))) > 0) {
+                for (int i = 0; i < bytes; i++) {
+                    if (buffer[i] != 0x04) {
+                        write(STDOUT_FILENO, &buffer[i], 1);
+                    }
+                }
+            }
+            fflush(buffer);
+        }
+
+        // if (bytes <= 0) {
+        //     perror("Client disconnected or SSL error");
+        //     SSL_shutdown(client->ssl);
+        //     SSL_free(client->ssl);
+        //     close(client->socket);
+        //     pthread_mutex_lock(&client_mutex);
+        //     int i;
+        //     for (i = 0; i < client_count; i++) {
+        //         if (clients[i].socket == client->socket) {
+        //             break;
+        //         }
+        //     }
+        //     if (i < client_count) {
+        //         clients[i] = clients[client_count - 1];
+        //         client_count--;
+        //     }
+        //     pthread_mutex_unlock(&client_mutex);
+        //     pthread_exit(NULL);
+        // }
+
+        // buffer[bytes] = 0;
+        // printf("Client: %s\n", buffer);
         //SSL_write(client->ssl, buffer, bytes);
     }
 }
@@ -248,7 +343,7 @@ int main(int argc, char **argv) {
         perror("Erreur lors de la création du thread stdin");
         exit(EXIT_FAILURE);
     }
-    printf("Server listening on port %d\n", 4433);
+    printf("Server listening on port %d\n \n", 4433);
 
     /*
      * Loop to accept clients.
@@ -267,8 +362,6 @@ int main(int argc, char **argv) {
             // exit(EXIT_FAILURE);  comprendre ce que ça fait
         }
 
-        printf("Client TCP connection accepted\n");
-
         /* Create server SSL structure using newly accepted client socket */
         ssl = SSL_new(ssl_ctx);
         SSL_set_fd(ssl, client_skt);
@@ -282,7 +375,6 @@ int main(int argc, char **argv) {
             SSL_free(ssl);
 
         } else {
-            printf("Client SSL connection accepted\n\n");
 
             const char *ping_message = "ping";
             if (SSL_write(ssl, ping_message, strlen(ping_message)) <= 0) {
@@ -296,8 +388,6 @@ int main(int argc, char **argv) {
             pthread_create(&client_threads[client_count], NULL, handle_client, &clients[client_count]);
             client_count++;
             pthread_mutex_unlock(&client_mutex);
-
-            printf("New client connected. Total clients: %d\n", client_count);
         }
     }
 

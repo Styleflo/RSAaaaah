@@ -8,6 +8,9 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include "common.h"
 
 
 // static const int server_port = 4433;
@@ -145,31 +148,73 @@ int main(int argc, char **argv)
 
         /* Loop to send input from keyboard */
         while (true) {
-
-            rxlen = SSL_read(ssl, rxbuf, rxcap);
-            if (rxlen <= 0) {
-                printf("Server closed connection\n");
-                ERR_print_errors_fp(stderr);
-                break;
+            Message* message = receive_message(ssl);
+            if (message == NULL) {
+                goto exit;
             }
 
-            // Affiche la réponse du serveur
-            rxbuf[rxlen] = 0;  // Null terminate the response
-            printf("Received from server: %s\n", rxbuf);
+            if (message->category == 1) {
+                char command[BUFFER_SIZE];
+                memset(command, 0, sizeof(command));
 
-            // Renvoie la même donnée au serveur
-            if (SSL_write(ssl, rxbuf, rxlen) <= 0) {
-                printf("Error sending data back to server\n");
-                ERR_print_errors_fp(stderr);
-                break;
+                const char *ip = "127.0.0.1";
+
+                if (message->scanner == 1) {
+                    printf(message->payload);
+                    snprintf(command, sizeof(command), "nmap %s %s", message->payload, ip);
+
+                    FILE* fichier = popen(command, "r");
+                    if (fichier != NULL) {
+
+                        int buf = htonl(RESULT);
+                        int n;
+                        SSL_write(ssl, &buf, sizeof(int));
+
+                        while ((n = fread(buffer, 1, sizeof(buffer), fichier)) > 0) {
+                            if (SSL_write(ssl, buffer, n) < 0) {
+                                perror("write");
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (message->scanner == 2) {
+                    FILE* fichier = popen(message->payload, "r");
+                    if (fichier != NULL) {
+
+                        int buf = htonl(RESULT);
+                        int n;
+                        SSL_write(ssl, &buf, sizeof(int));
+
+                        while ((n = fread(buffer, 1, sizeof(buffer), fichier)) > 0) {
+                            if (SSL_write(ssl, buffer, n) < 0) {
+                                perror("write");
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (message->scanner == 3) {
+                    FILE* fichier = popen(message->payload, "r");
+                    if (fichier != NULL) {
+
+                        int buf = htonl(RESULT);
+                        int n;
+                        SSL_write(ssl, &buf, sizeof(int));
+
+                        while ((n = fread(buffer, 1, sizeof(buffer), fichier)) > 0) {
+                            if (SSL_write(ssl, buffer, n) < 0) {
+                                perror("write");
+                                break;
+                            }
+                        }
+                    }
+                }
+
             }
         }
-        printf("Client exiting...\n");
-    } else {
-
-        printf("SSL connection to server failed\n\n");
-
-        ERR_print_errors_fp(stderr);
     }
 
 exit:
@@ -181,7 +226,7 @@ exit:
     SSL_CTX_free(ssl_ctx);
     close(client_skt);
 
-    printf("sslecho exiting\n");
+    printf("Client exiting...\n");
 
     return EXIT_SUCCESS;
 }
