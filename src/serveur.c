@@ -8,7 +8,6 @@
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include <semaphore.h>
 #include "common.h"
 
 #define MAX_CLIENTS 100
@@ -137,31 +136,406 @@ static void *handle_stdin(void *arg) {
                 message->scanner = 1;
 
                 printf("========================[Server]========================\n");
-                pthread_mutex_lock(&client_mutex);
-                printf("Connected clients:\n");
-                for (int i = 0; i < client_count; i++) {
-                    printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO \n", clients[i].id);
-                }
-                pthread_mutex_unlock(&client_mutex);
-                printf("Enter the client ID : ");
+                printf("Option :\n");
+                printf("[1] TCP \n");
+                printf("[2] Ping \n");
+                printf("[3] all \n");
+                printf("[4] custom \n");
 
                 fgets(buffer, sizeof(buffer), stdin);
-                client_id = atoi(buffer);
 
-                printf("Enter the arguments : ");
-                fgets(buffer, sizeof(buffer), stdin);
-
-                message->payload = malloc((strlen(buffer) + 1) * sizeof(char));
-                strcpy(message->payload, buffer);
-
-                if (client_id <= client_count) {
+                if (strncmp(buffer, "1", 1) == 0) {
+                    printf("========================[Server]========================\n");
                     pthread_mutex_lock(&client_mutex);
+                    printf("Connected clients:\n");
                     for (int i = 0; i < client_count; i++) {
-                        if (clients[i].id == client_id) {
-                            send_message(clients[i], message);
-                        }
+                        printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO \n", clients[i].id);
                     }
                     pthread_mutex_unlock(&client_mutex);
+                    printf("Enter the client ID : ");
+
+                    fgets(buffer, sizeof(buffer), stdin);
+                    client_id = atoi(buffer);
+
+                    printf("Enter the ip adress : ");
+                    fgets(buffer, sizeof(buffer), stdin);
+                    char payload[BUFFER_SIZE];
+                    const char* cmd = "-sT";
+
+                    message->payload = malloc((strlen(cmd) + strlen(buffer) + 2) * sizeof(char));
+                    snprintf(payload, sizeof(payload), "%s %s", cmd, buffer);
+
+                    strcpy(message->payload, payload);
+
+                    if (client_id <= client_count) {
+                        pthread_mutex_lock(&client_mutex);
+                        for (int i = 0; i < client_count; i++) {
+                            if (clients[i].id == client_id) {
+                                send_message(clients[i], message);
+                            }
+                        }
+                        pthread_mutex_unlock(&client_mutex);
+                    }
+                }
+
+                else if (strncmp(buffer, "2", 1) == 0) {
+                    printf("========================[Server]========================\n");
+                    pthread_mutex_lock(&client_mutex);
+                    printf("Connected clients:\n");
+                    for (int i = 0; i < client_count; i++) {
+                        printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO \n", clients[i].id);
+                    }
+                    pthread_mutex_unlock(&client_mutex);
+                    printf("Enter the client ID : ");
+
+                    fgets(buffer, sizeof(buffer), stdin);
+                    client_id = atoi(buffer);
+
+                    printf("Enter the ip adress : ");
+                    fgets(buffer, sizeof(buffer), stdin);
+                    char payload[BUFFER_SIZE];
+                    const char* cmd = "-sP";
+
+                    message->payload = malloc((strlen(cmd) + strlen(buffer) + 2) * sizeof(char));
+                    snprintf(payload, sizeof(payload), "%s %s", cmd, buffer);
+
+                    strcpy(message->payload, payload);
+
+                    if (client_id <= client_count) {
+                        pthread_mutex_lock(&client_mutex);
+                        for (int i = 0; i < client_count; i++) {
+                            if (clients[i].id == client_id) {
+                                send_message(clients[i], message);
+                            }
+                        }
+                        pthread_mutex_unlock(&client_mutex);
+                    }
+                }
+
+                else if (strncmp(buffer, "3", 1) == 0) {
+                    printf("========================[Server]========================\n");
+                    pthread_mutex_lock(&client_mutex);
+                    printf("Connected clients:\n");
+                    for (int i = 0; i < client_count; i++) {
+                        printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO \n", clients[i].id);
+                    }
+                    pthread_mutex_unlock(&client_mutex);
+                    printf("Enter the client ID : ");
+
+                    fgets(buffer, sizeof(buffer), stdin);
+                    client_id = atoi(buffer);
+
+                    printf("Enter the ip adress : ");
+                    fgets(buffer, sizeof(buffer), stdin);
+                    char payload[BUFFER_SIZE];
+                    const char* cmd = "-A";
+
+                    message->payload = malloc((strlen(cmd) + strlen(buffer) + 2) * sizeof(char));
+                    snprintf(payload, sizeof(payload), "%s %s", cmd, buffer);
+
+                    strcpy(message->payload, payload);
+
+                    if (client_id <= client_count) {
+                        pthread_mutex_lock(&client_mutex);
+                        for (int i = 0; i < client_count; i++) {
+                            if (clients[i].id == client_id) {
+                                send_message(clients[i], message);
+                            }
+                        }
+                        pthread_mutex_unlock(&client_mutex);
+                    }
+                }
+
+                else if (strncmp(buffer, "4", 1) == 0) {
+                    printf("========================[Server]========================\n");
+                    pthread_mutex_lock(&client_mutex);
+                    printf("Connected clients:\n");
+                    for (int i = 0; i < client_count; i++) {
+                        printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO \n", clients[i].id);
+                    }
+                    pthread_mutex_unlock(&client_mutex);
+                    printf("Enter the client ID : ");
+
+                    fgets(buffer, sizeof(buffer), stdin);
+                    client_id = atoi(buffer);
+
+                    printf("Enter the arguments et l'ip : ");
+                    fgets(buffer, sizeof(buffer), stdin);
+
+                    message->payload = malloc((strlen(buffer) + 1) * sizeof(char));
+                    strcpy(message->payload, buffer);
+
+                    if (client_id <= client_count) {
+                        pthread_mutex_lock(&client_mutex);
+                        for (int i = 0; i < client_count; i++) {
+                            if (clients[i].id == client_id) {
+                                send_message(clients[i], message);
+                            }
+                        }
+                        pthread_mutex_unlock(&client_mutex);
+                    }
+                }
+                else {
+                    printf("Unknown command\n");
+                }
+            }
+
+            else if (strncmp(buffer, "2", 1) == 0) {  // 2 correspond à OWASP ZAP
+                message->scanner = 2;
+
+                printf("========================[Server]========================\n");
+                printf("Option :\n");
+                printf("[1] Spider (Exploration rapide)\n");
+                printf("[2] Active Scan (Scan actif)\n");
+                printf("[3] Full Scan (Spider + Active Scan)\n");
+                printf("[4] Custom (Commande personnalisée)\n");
+
+                fgets(buffer, sizeof(buffer), stdin);
+
+                if (strncmp(buffer, "1", 1) == 0) {
+                    printf("========================[Server]========================\n");
+                    pthread_mutex_lock(&client_mutex);
+                    printf("Connected clients:\n");
+                    for (int i = 0; i < client_count; i++) {
+                        printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO \n", clients[i].id);
+                    }
+                    pthread_mutex_unlock(&client_mutex);
+                    printf("Enter the client ID : ");
+
+                    fgets(buffer, sizeof(buffer), stdin);
+                    client_id = atoi(buffer);
+
+                    printf("Enter the URL to spider : ");
+                    fgets(buffer, sizeof(buffer), stdin);
+
+                    char payload[BUFFER_SIZE];
+                    snprintf(payload, sizeof(payload), "http://127.0.0.1:8080/JSON/spider/action/scan/?url=%s", buffer);
+
+                    message->payload = malloc(strlen(payload) + 1);
+                    strcpy(message->payload, payload);
+
+                    if (client_id <= client_count) {
+                        pthread_mutex_lock(&client_mutex);
+                        for (int i = 0; i < client_count; i++) {
+                            if (clients[i].id == client_id) {
+                                send_message(clients[i], message);
+                            }
+                        }
+                        pthread_mutex_unlock(&client_mutex);
+                    }
+                }
+
+                else if (strncmp(buffer, "2", 1) == 0) {
+                    printf("========================[Server]========================\n");
+                    pthread_mutex_lock(&client_mutex);
+                    printf("Connected clients:\n");
+                    for (int i = 0; i < client_count; i++) {
+                        printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO \n", clients[i].id);
+                    }
+                    pthread_mutex_unlock(&client_mutex);
+                    printf("Enter the client ID : ");
+
+                    fgets(buffer, sizeof(buffer), stdin);
+                    client_id = atoi(buffer);
+
+                    printf("Enter the URL to actively scan : ");
+                    fgets(buffer, sizeof(buffer), stdin);
+
+                    char payload[BUFFER_SIZE];
+                    snprintf(payload, sizeof(payload), "http://127.0.0.1:8080/JSON/ascan/action/scan/?url=%s", buffer);
+
+                    message->payload = malloc(strlen(payload) + 1);
+                    strcpy(message->payload, payload);
+
+                    if (client_id <= client_count) {
+                        pthread_mutex_lock(&client_mutex);
+                        for (int i = 0; i < client_count; i++) {
+                            if (clients[i].id == client_id) {
+                                send_message(clients[i], message);
+                            }
+                        }
+                        pthread_mutex_unlock(&client_mutex);
+                    }
+                }
+
+                else if (strncmp(buffer, "3", 1) == 0) {
+                    printf("========================[Server]========================\n");
+                    pthread_mutex_lock(&client_mutex);
+                    printf("Connected clients:\n");
+                    for (int i = 0; i < client_count; i++) {
+                        printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO \n", clients[i].id);
+                    }
+                    pthread_mutex_unlock(&client_mutex);
+                    printf("Enter the client ID : ");
+
+                    fgets(buffer, sizeof(buffer), stdin);
+                    client_id = atoi(buffer);
+
+                    printf("Enter the URL for full scan (Spider + Active Scan) : ");
+                    fgets(buffer, sizeof(buffer), stdin);
+
+                    char payload[BUFFER_SIZE];
+                    snprintf(payload, sizeof(payload), "http://127.0.0.1:8080/JSON/spider/action/scan/?url=%s", buffer);
+
+                    message->payload = malloc(strlen(payload) + 1);
+                    strcpy(message->payload, payload);
+
+                    if (client_id <= client_count) {
+                        pthread_mutex_lock(&client_mutex);
+                        for (int i = 0; i < client_count; i++) {
+                            if (clients[i].id == client_id) {
+                                send_message(clients[i], message);
+                            }
+                        }
+                        pthread_mutex_unlock(&client_mutex);
+                    }
+
+                    // Ensuite lancer l'active scan après le spider
+                    snprintf(payload, sizeof(payload), "http://127.0.0.1:8080/JSON/ascan/action/scan/?url=%s", buffer);
+                    strcpy(message->payload, payload);
+                }
+
+                else if (strncmp(buffer, "4", 1) == 0) {
+                    printf("========================[Server]========================\n");
+                    pthread_mutex_lock(&client_mutex);
+                    printf("Connected clients:\n");
+                    for (int i = 0; i < client_count; i++) {
+                        printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO \n", clients[i].id);
+                    }
+                    pthread_mutex_unlock(&client_mutex);
+                    printf("Enter the client ID : ");
+
+                    fgets(buffer, sizeof(buffer), stdin);
+                    client_id = atoi(buffer);
+
+                    printf("Enter the custom API call for ZAP : ");
+                    fgets(buffer, sizeof(buffer), stdin);
+
+                    message->payload = malloc(strlen(buffer) + 1);
+                    strcpy(message->payload, buffer);
+
+                    if (client_id <= client_count) {
+                        pthread_mutex_lock(&client_mutex);
+                        for (int i = 0; i < client_count; i++) {
+                            if (clients[i].id == client_id) {
+                                send_message(clients[i], message);
+                            }
+                        }
+                        pthread_mutex_unlock(&client_mutex);
+                    }
+                } else {
+                    printf("Unknown command\n");
+                }
+}
+
+
+            else if (strncmp(buffer, "3", 1) == 0) {
+                message->scanner = 3;  // identifiant Nikto
+
+                printf("========================[Server]========================\n");
+                printf("Option Nikto :\n");
+                printf("[1] Basic scan HTTP on port 80\n");
+                printf("[2] Specific port scan\n");
+                printf("[3] Arguments personnalisés\n");
+
+                fgets(buffer, sizeof(buffer), stdin);
+
+                if (strncmp(buffer, "1", 1) == 0) {
+                    pthread_mutex_lock(&client_mutex);
+                    printf("Connected clients:\n");
+                    for (int i = 0; i < client_count; i++) {
+                        printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO \n", clients[i].id);
+                    }
+                    pthread_mutex_unlock(&client_mutex);
+
+                    printf("Enter the client ID : ");
+                    fgets(buffer, sizeof(buffer), stdin);
+                    client_id = atoi(buffer);
+
+                    printf("Enter the target URL or IP (ex: http://example.com): ");
+                    fgets(buffer, sizeof(buffer), stdin);
+
+                    char payload[BUFFER_SIZE];
+                    snprintf(payload, sizeof(payload), "nikto -h %s", buffer);
+
+                    message->payload = malloc((strlen(payload) + 1)*sizeof(char));
+                    strcpy(message->payload, payload);
+
+                    if (client_id <= client_count) {
+                        pthread_mutex_lock(&client_mutex);
+                        for (int i = 0; i < client_count; i++) {
+                            if (clients[i].id == client_id) {
+                                send_message(clients[i], message);
+                            }
+                        }
+                        pthread_mutex_unlock(&client_mutex);
+                    }
+                }
+
+                else if (strncmp(buffer, "2", 1) == 0) {
+                    pthread_mutex_lock(&client_mutex);
+                    printf("Connected clients:\n");
+                    for (int i = 0; i < client_count; i++) {
+                        printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO \n", clients[i].id);
+                    }
+                    pthread_mutex_unlock(&client_mutex);
+
+                    printf("Enter the client ID : ");
+                    fgets(buffer, sizeof(buffer), stdin);
+                    client_id = atoi(buffer);
+
+                    printf("Enter the target URL or IP: ");
+                    fgets(buffer, sizeof(buffer), stdin);
+                    buffer[strcspn(buffer, "\n")] = 0;
+
+                    printf("Enter the port number: ");
+                    char port[20];
+                    fgets(port, sizeof(port), stdin);
+
+                    char payload[BUFFER_SIZE];
+                    snprintf(payload, sizeof(payload), "nikto -h %s -p %s", buffer, port);
+
+                    message->payload = malloc((strlen(payload) + 1)*sizeof(char));
+                    strcpy(message->payload, payload);
+
+                    if (client_id <= client_count) {
+                        pthread_mutex_lock(&client_mutex);
+                        for (int i = 0; i < client_count; i++) {
+                            if (clients[i].id == client_id) {
+                                send_message(clients[i], message);
+                            }
+                        }
+                        pthread_mutex_unlock(&client_mutex);
+                    }
+                }
+
+                else if (strncmp(buffer, "3", 1) == 0) {
+                    pthread_mutex_lock(&client_mutex);
+                    printf("Connected clients:\n");
+                    for (int i = 0; i < client_count; i++) {
+                        printf("Client ID: %d | Scanners: NMAP + OWASP ZAP + NIKO \n", clients[i].id);
+                    }
+                    pthread_mutex_unlock(&client_mutex);
+
+                    printf("Enter the client ID : ");
+                    fgets(buffer, sizeof(buffer), stdin);
+                    client_id = atoi(buffer);
+
+                    printf("Enter custom arguments (ex: -h http://target -p 8080 -Tuning x): ");
+                    fgets(buffer, sizeof(buffer), stdin);
+
+                    message->payload = malloc((strlen(buffer) + 1)*sizeof(char));
+                    strcpy(message->payload, buffer);
+
+                    if (client_id <= client_count) {
+                        pthread_mutex_lock(&client_mutex);
+                        for (int i = 0; i < client_count; i++) {
+                            if (clients[i].id == client_id) {
+                                send_message(clients[i], message);
+                            }
+                        }
+                        pthread_mutex_unlock(&client_mutex);
+                    }
                 }
             }
         }
@@ -188,7 +562,6 @@ static void *handle_stdin(void *arg) {
             } //list of client
 
             else if (strncmp(buffer, "3", 1) == 0) {
-                int client_id;
                 char message2[BUFFER_SIZE];
                 printf("========================[Server]========================\n");
                 pthread_mutex_lock(&client_mutex);
@@ -286,7 +659,7 @@ static void *handle_client(void *arg) {
             printf("========================[Result]========================\n");
             while ((bytes = SSL_read(client->ssl, buffer, sizeof(buffer))) > 0) {
                 for (int i = 0; i < bytes; i++) {
-                    if (buffer[i] != 0x04) {
+                    if (buffer[i] != EOF) {
                         write(STDOUT_FILENO, &buffer[i], 1);
                     }
                 }

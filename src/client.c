@@ -11,6 +11,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "common.h"
+#include <string.h>
+#include <netdb.h>
+#include <ifaddrs.h>
 
 
 // static const int server_port = 4433;
@@ -70,6 +73,34 @@ static void configure_client_context(SSL_CTX *ctx)
     }
 }
 
+int get_local_ip(char *buffer, size_t buffer_size) {
+    struct ifaddrs *ifaddr, *ifa;
+    int family;
+
+    if (getifaddrs(&ifaddr) == -1) {
+        perror("getifaddrs");
+        return -1;
+    }
+
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr == NULL)
+            continue;
+
+        family = ifa->ifa_addr->sa_family;
+
+        // On cherche uniquement les adresses IPv4
+        if (family == AF_INET && strcmp(ifa->ifa_name, "lo") != 0) {
+            if (getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in), buffer, buffer_size, NULL, 0, NI_NUMERICHOST) == 0) {
+                freeifaddrs(ifaddr);
+                return 0;
+            }
+        }
+    }
+
+    freeifaddrs(ifaddr);
+    return -1;
+}
+
 
 #define BUFFERSIZE 1024
 int main(int argc, char **argv)
@@ -78,11 +109,10 @@ int main(int argc, char **argv)
     SSL_CTX *ssl_ctx = NULL;
     SSL *ssl = NULL;
 
-    int client_skt = -1;
+    int client_skt;
 
     /* used by fgets */
     char buffer[BUFFERSIZE];
-    char *txbuf;
 
     char rxbuf[128];
     size_t rxcap = sizeof(rxbuf);
@@ -157,11 +187,8 @@ int main(int argc, char **argv)
                 char command[BUFFER_SIZE];
                 memset(command, 0, sizeof(command));
 
-                const char *ip = "127.0.0.1";
-
                 if (message->scanner == 1) {
-                    printf(message->payload);
-                    snprintf(command, sizeof(command), "nmap %s %s", message->payload, ip);
+                    snprintf(command, sizeof(command), "nmap %s", message->payload);
 
                     FILE* fichier = popen(command, "r");
                     if (fichier != NULL) {
@@ -176,40 +203,92 @@ int main(int argc, char **argv)
                                 break;
                             }
                         }
+                        pclose(fichier);
+                    } else {
+                        perror("popen");
                     }
                 }
 
-                if (message->scanner == 2) {
-                    FILE* fichier = popen(message->payload, "r");
-                    if (fichier != NULL) {
+                if (message->scanner == 2) {  // 2 = OWASP ZAP
+                    printf("%s", message->payload);
 
+                    // Vérifier si ZAP est déjà lancé
+                    FILE* zap_check = popen("ps aux | grep '[z]ap.sh'", "r");
+                    if (zap_check) {
+                        if (fgets(buffer, sizeof(buffer), zap_check) == NULL) {
+                            printf("OWASP ZAP non détecté, démarrage...\n");
+                            system("zap.sh -daemon -port 8080 &");
+                            printf("OWASP ZAP démarré en mode daemon.\n");
+
+                            // Attendre que ZAP soit prêt
+                            int is_ready = 0;
+                            while (!is_ready) {
+                                FILE* curl_check = popen("curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080", "r");
+                                if (curl_check) {
+                                    char status[4];
+                                    fgets(status, sizeof(status), curl_check);
+                                    if (strncmp(status, "200", 3) == 0) {
+                                        is_ready = 1;
+                                    } else {
+                                        printf("En attente de l'initialisation de ZAP...\n");
+                                        sleep(2);  // Attente avant le prochain check
+                                    }
+                                    pclose(curl_check);
+                                }
+                            }
+                            printf("OWASP ZAP est prêt.\n");
+                        } else {
+                            printf("OWASP ZAP déjà démarré.\n");
+                        }
+                        pclose(zap_check);
+                    }
+
+                    // Lancer le scan via l'URL contenue dans le payload
+                    snprintf(command, sizeof(command), "curl '%s'", message->payload);
+
+                    FILE* fichier = popen(command, "r");
+                    if (fichier != NULL) {
                         int buf = htonl(RESULT);
-                        int n;
                         SSL_write(ssl, &buf, sizeof(int));
 
+                        int n;
                         while ((n = fread(buffer, 1, sizeof(buffer), fichier)) > 0) {
                             if (SSL_write(ssl, buffer, n) < 0) {
                                 perror("write");
                                 break;
                             }
                         }
+                        pclose(fichier);
+                    } else {
+                        perror("popen");
                     }
                 }
 
-                if (message->scanner == 3) {
-                    FILE* fichier = popen(message->payload, "r");
-                    if (fichier != NULL) {
 
+
+                if (message->scanner == 3) {  // 3 = Nikto
+                    printf("%s", message->payload);
+
+                    // Construction de la commande Nikto
+                    snprintf(command, sizeof(command), "nikto %s", message->payload);
+
+                    // Exécution de la commande avec popen
+                    FILE* fichier = popen(command, "r");
+                    if (fichier != NULL) {
                         int buf = htonl(RESULT);
-                        int n;
                         SSL_write(ssl, &buf, sizeof(int));
 
+                        int n;
+                        // Lecture des résultats de la commande et envoi via SSL
                         while ((n = fread(buffer, 1, sizeof(buffer), fichier)) > 0) {
                             if (SSL_write(ssl, buffer, n) < 0) {
                                 perror("write");
                                 break;
                             }
                         }
+                        pclose(fichier);
+                    } else {
+                        perror("popen");
                     }
                 }
 
