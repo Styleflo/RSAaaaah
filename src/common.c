@@ -49,7 +49,6 @@ Message* receive_message(SSL* ssl) {
         printf("erreur à régler\n");
     }
     message->payload[len-1] = '\0';
-    printf("%s\n", message->payload);
 
     return message;
 }

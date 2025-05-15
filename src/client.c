@@ -210,7 +210,6 @@ int main(int argc, char **argv)
                 }
 
                 if (message->scanner == 2) {  // 2 = OWASP ZAP
-                    printf("%s", message->payload);
 
                     // Vérifier si ZAP est déjà lancé
                     FILE* zap_check = popen("ps aux | grep '[z]ap.sh'", "r");
@@ -264,10 +263,7 @@ int main(int argc, char **argv)
                     }
                 }
 
-
-
                 if (message->scanner == 3) {  // 3 = Nikto
-                    printf("%s", message->payload);
 
                     // Construction de la commande Nikto
                     snprintf(command, sizeof(command), "nikto %s", message->payload);
@@ -292,6 +288,10 @@ int main(int argc, char **argv)
                     }
                 }
 
+            }
+
+            else if (message->category == 2) {
+                printf("received from server : %s\n", message->payload);
             }
         }
     }

