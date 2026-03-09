@@ -38,7 +38,7 @@ L’objectif est d’exécuter des analyses de sécurité sur un ou plusieurs h�
 * Make
 * Nmap
 * OWASP ZAP
-* Nikto
+* Niktocd sr
 
 ### Structure des répertoires
 
